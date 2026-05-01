@@ -1,0 +1,19 @@
+{
+  "name": "kgs-proxy",
+  "version": "1.0.0",
+  "description": "KGS Proxy with auto-decryption - Real data from original API",
+  "main": "api/[...path].js",
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel deploy --prod"
+  },
+  "dependencies": {
+    "crypto-js": "^4.2.0"
+  },
+  "devDependencies": {
+    "vercel": "^32.0.0"
+  },
+  "keywords": ["proxy", "kgs", "decryption", "vercel"],
+  "author": "SPIDY UNIVERSE",
+  "license": "MIT"
+}
