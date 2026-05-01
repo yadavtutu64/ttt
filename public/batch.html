@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Batch Details</title>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Poppins', sans-serif; background: linear-gradient(135deg, #e3f0ff 0%, #ffe0b2 100%); min-height: 100vh; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .back-btn { display: inline-flex; align-items: center; gap: 8px; background: #ff9800; color: white; text-decoration: none; padding: 10px 20px; border-radius: 10px; margin-bottom: 20px; font-weight: 600; cursor: pointer; border: none; }
+        .batch-header { background: white; border-radius: 16px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; overflow-x: auto; padding: 10px 0; }
+        .tab { padding: 12px 24px; background: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600; white-space: nowrap; }
+        .tab.active { background: #1a237e; color: white; }
+        .tab-content { background: white; border-radius: 16px; padding: 20px; min-height: 400px; }
+        .loading { text-align: center; padding: 40px; color: #666; }
+        .error { text-align: center; padding: 40px; color: #d32f2f; }
+        .class-card { border: 1px solid #e0e0e0; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+        .topic-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 16px; }
+        .topic-card { border: 1px solid #e0e0e0; border-radius: 12px; padding: 16px; cursor: pointer; transition: 0.3s; }
+        .topic-card:hover { transform: translateY(-5px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <button onclick="history.back()" class="back-btn">
+            <span class="material-icons">arrow_back</span> Back
+        </button>
+        
+        <div id="batchHeader" class="batch-header">
+            <div class="loading">Loading batch details...</div>
+        </div>
+        
+        <div class="tabs" id="tabs">
+            <button class="tab active" data-tab="today">Today's Class</button>
+            <button class="tab" data-tab="classroom">Classroom</button>
+            <button class="tab" data-tab="updates">Updates</button>
+            <button class="tab" data-tab="timetable">Timetable</button>
+        </div>
+        
+        <div id="tabContent" class="tab-content">
+            <div class="loading">Loading content...</div>
+        </div>
+    </div>
+    
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const batchId = urlParams.get('id');
+        const API_BASE = 'https://kgs-dmaxx.vercel.app';
+
+        if (!batchId) { alert("Batch ID missing!"); history.back(); }
+
+        async function fetchAPI(endpoint) {
+            try {
+                const url = endpoint.startsWith('http') ? endpoint : `${API_BASE}${endpoint}`;
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+                return await response.json();
+            } catch (err) {
+                console.error(`Fetch failed: ${err.message}`);
+                throw err;
+            }
+        }
+
+        async function loadBatchHeader() {
+            try {
+                const batch = await fetchAPI(`/api/batches/${batchId}`);
+                document.getElementById('batchHeader').innerHTML = `
+                    <h1>${batch.title || 'Batch Details'}</h1>
+                    <p>${batch.description || batch.subtitle || ''}</p>
+                `;
+            } catch (error) {
+                document.getElementById('batchHeader').innerHTML = `<p class="error">Failed to load header</p>`;
+            }
+        }
+
+        async function loadTab(tab) {
+            const content = document.getElementById('tabContent');
+            content.innerHTML = '<div class="loading">Loading...</div>';
+            try {
+                let data = await fetchAPI(`/api/${tab}/${batchId}`);
+                if (tab === 'classroom') renderClassroom(data, content);
+                else if (tab === 'today') renderToday(data, content);
+                else if (tab === 'updates') renderUpdates(data, content);
+                else content.innerHTML = `<div class="error">No data found for ${tab}</div>`;
+            } catch (error) {
+                content.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        function renderClassroom(data, container) {
+            const topics = data.classroom || (Array.isArray(data) ? data : []);
+            if (!topics.length) { container.innerHTML = '<p class="error">No topics found.</p>'; return; }
+            
+            container.innerHTML = `
+                <div class="topic-grid">
+                    ${topics.map(t => `
+                        <div class="topic-card" onclick="loadSubjects(${t.id}, '${encodeURIComponent(t.name)}')">
+                            <h3>${t.name}</h3>
+                            <p>📁 View Content</p>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        async function loadSubjects(topicId, encodedName) {
+            const name = decodeURIComponent(encodedName);
+            const content = document.getElementById('tabContent');
+            content.innerHTML = `<div class="loading">Loading Subjects for ${name}...</div>`;
+            try {
+                const data = await fetchAPI(`/api/subjects/${topicId}`);
+                const subjects = data.subjects || (Array.isArray(data) ? data : []);
+
+                content.innerHTML = `
+                    <div style="margin-bottom:15px;"><button onclick="loadTab('classroom')" style="padding:5px 10px; cursor:pointer;">← Back to Topics</button></div>
+                    <div class="topic-grid">
+                        ${subjects.map(s => `
+                            <div class="topic-card" onclick="loadLessons(${s.id}, '${encodeURIComponent(s.name)}')">
+                                <h3>${s.name}</h3>
+                                <p>📚 View Lessons</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            } catch (e) { content.innerHTML = `<p class="error">${e.message}</p>`; }
+        }
+
+        async function loadLessons(subId, encodedName) {
+            const name = decodeURIComponent(encodedName);
+            const content = document.getElementById('tabContent');
+            content.innerHTML = `<div class="loading">Loading Lessons for ${name}...</div>`;
+            try {
+                const data = await fetchAPI(`/api/lessons/${subId}`);
+                const lessons = data.lessons || (Array.isArray(data) ? data : []);
+
+                content.innerHTML = `
+                    <div style="margin-bottom:15px;"><button onclick="loadTab('classroom')" style="padding:5px 10px; cursor:pointer;">← Back</button></div>
+                    ${lessons.map(l => `
+                        <div class="class-card">
+                            <h3>${l.name}</h3>
+                            <div style="margin-top:10px; display:flex; gap:10px;">
+                                ${l.video_url ? `<a href="${l.video_url}" target="_blank" style="padding:8px 15px; background:#ff9800; color:white; text-decoration:none; border-radius:8px; font-weight:600;">▶ Watch Video</a>` : ''}
+                                ${l.pdf_url ? `<a href="${l.pdf_url}" target="_blank" style="padding:8px 15px; background:#1a237e; color:white; text-decoration:none; border-radius:8px; font-weight:600;">📄 View PDF</a>` : ''}
+                            </div>
+                        </div>
+                    `).join('')}
+                `;
+            } catch (e) { content.innerHTML = `<p class="error">${e.message}</p>`; }
+        }
+
+        function renderToday(data, container) {
+            const classes = data.todayclasses || (Array.isArray(data) ? data : []);
+            if (!classes.length) { container.innerHTML = '<p style="text-align:center; padding:20px;">No classes scheduled for today.</p>'; return; }
+            container.innerHTML = classes.map(c => `
+                <div class="class-card">
+                    <h3>${c.name}</h3>
+                    <p>👨‍🏫 ${c.teacher || 'Teacher TBA'}</p>
+                    ${c.video_url ? `<a href="${c.video_url}" target="_blank" style="display:inline-block; margin-top:10px; color:#ff9800; font-weight:bold;">Watch Now</a>` : ''}
+                </div>
+            `).join('');
+        }
+
+        function renderUpdates(data, container) {
+            const updates = data.updates || data.announcements || (Array.isArray(data) ? data : []);
+            if (!updates.length) { container.innerHTML = '<p style="text-align:center;">No updates found.</p>'; return; }
+            container.innerHTML = updates.map(u => `
+                <div class="class-card" style="border-left:5px solid #ff9800;">
+                    <p>${u.description || u.content || u.text}</p>
+                </div>
+            `).join('');
+        }
+
+        document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+            document.querySelectorAll('.tab').forEach(btn => btn.classList.remove('active'));
+            t.classList.add('active');
+            loadTab(t.dataset.tab);
+        }));
+
+        loadBatchHeader();
+        loadTab('today');
+    </script>
+</body>
+</html>
